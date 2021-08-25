@@ -91,7 +91,7 @@ def train(gpu, args):
             msg = (
                 f"epoch {eid+1}/{args.nb_epochs} | "
                 f"train loss: {train_loss / len(train_loader)} | "
-                f"test loss: {test_loss / len(test_loader)} "
+                f"test loss: {test_loss / len(test_loader)}"
             )
             print(msg)
 
@@ -105,10 +105,12 @@ if __name__ == '__main__':
     parser.add_argument('--seed', default=123, type=int)
     parser.add_argument('--batch-size', default=128, type=int)
     parser.add_argument('--nb-epochs', default=100, type=int)
+    parser.add_argument('--address', default='127.0.0.1', type=str)
+    parser.add_argument('--port', default='12345', type=str)
     args = parser.parse_args()
 
     args.world_size = args.nodes * args.gpus
-    os.environ['MASTER_ADDR'] = '127.0.0.1'
-    os.environ['MASTER_PORT'] = '12345'
+    os.environ['MASTER_ADDR'] = args.address
+    os.environ['MASTER_PORT'] = args.port
     mp.spawn(train, nprocs=args.gpus, args=(args,))
 
