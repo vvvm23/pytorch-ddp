@@ -33,12 +33,14 @@ class Net(nn.Module):
 
 def train(gpu, args):
     rank = args.rank * args.gpus + gpu
+    log = lambda s: print(f"> process {rank}: {s}")
     dist.init_process_group(
         backend='nccl', init_method = 'env://',
         world_size = args.world_size,
         rank = rank
     )
-    print(f"process {rank} beginning training")
+
+    log("process started up")
     torch.manual_seed(args.seed)
 
     net = Net()
@@ -47,12 +49,14 @@ def train(gpu, args):
 
     optim = torch.optim.Adam(net.parameters(), lr=1e-4)
     net = nn.parallel.DistributedDataParallel(net, device_ids=[gpu])
+    log("initialised neural network")
 
     transforms = torchvision.transforms.Compose([
         torchvision.transforms.ToTensor(),
     ])
     train_dataset = torchvision.datasets.MNIST('data', train=True, transform=transforms, download=True)
     test_dataset = torchvision.datasets.MNIST('data', train=False, transform=transforms, download=True)
+    log("initialised dataset")
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         train_dataset, num_replicas = args.world_size, rank = rank
@@ -60,10 +64,13 @@ def train(gpu, args):
     test_sampler = torch.utils.data.distributed.DistributedSampler(
         test_dataset, num_replicas = args.world_size, rank = rank
     )
+    log("initialised distributed sampler")
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, pin_memory=True, sampler=train_sampler)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, pin_memory=True, sampler=test_sampler)
+    log("initialised dataloader")
 
+    log("beginning training loop")
     for eid in range(args.nb_epochs):
         net.train()
         train_loss, test_loss = 0.0, 0.0
