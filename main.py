@@ -74,6 +74,7 @@ def train(gpu, args):
     for eid in range(args.nb_epochs):
         net.train()
         train_loss, test_loss = 0.0, 0.0
+        train_acc, test_acc = 0.0, 0.0
         for x, y in train_loader:
             x, y = x.cuda(non_blocking=True), y.cuda(non_blocking=True)
             logits = net(x)
@@ -84,6 +85,7 @@ def train(gpu, args):
             optim.step()
 
             train_loss += loss.item()
+            train_acc += (logits.argmax(dim=-1) == y).float().mean()
         
         net.eval()
         with torch.no_grad():
@@ -93,12 +95,13 @@ def train(gpu, args):
                 loss = F.cross_entropy(logits, y)
 
                 test_loss += loss.item()
+                test_acc += (logits.argmax(dim=-1) == y).float().mean()
 
         if rank == 0:
             msg = (
-                f"epoch {eid+1}/{args.nb_epochs} | "
-                f"train loss: {train_loss / len(train_loader)} | "
-                f"test loss: {test_loss / len(test_loader)}"
+                f"epoch {eid+1}/{args.nb_epochs}\n"
+                f"train loss: {train_loss / len(train_loader)} | train accuracy: {100.0*train_acc / len(train_loader)}\n"
+                f"test loss: {test_loss / len(test_loader)} | test_accuracy: {100.0*test_acc / len(test_loader)}\n"
             )
             print(msg)
 
@@ -110,8 +113,8 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--gpus', default=1, type=int)
     parser.add_argument('-r', '--rank', default=0, type=int)
     parser.add_argument('--seed', default=123, type=int)
-    parser.add_argument('--batch-size', default=128, type=int)
-    parser.add_argument('--nb-epochs', default=100, type=int)
+    parser.add_argument('--batch-size', default=256, type=int)
+    parser.add_argument('--nb-epochs', default=1000, type=int)
     parser.add_argument('--address', default='127.0.0.1', type=str)
     parser.add_argument('--port', default='12345', type=str)
     args = parser.parse_args()
