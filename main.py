@@ -7,6 +7,9 @@ import torch.multiprocessing as mp
 import torchvision
 import torchvision.transforms as transforms
 
+import numpy as np
+import random
+
 import os
 import argparse
 
@@ -31,7 +34,22 @@ class Net(nn.Module):
         x = self.fc(x.view(-1, 32*7*7))
         return x
 
+def worker_init_fn(self):
+    seed = torch.initial_seed() % 2**32
+    set_seed(seed)
+
+def set_seed(seed = None, min_seed=0, max_seed=2**8):
+    if seed == None:
+        seed = random.randint(min_seed, max_seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.random.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    return seed
+
 def train(gpu, args):
+    set_seed(args.seed)
     rank = args.rank * args.gpus + gpu
     log = lambda s: print(f"> process {rank}: {s}")
     dist.init_process_group(
@@ -41,7 +59,6 @@ def train(gpu, args):
     )
 
     log("process started up")
-    torch.manual_seed(args.seed)
 
     net = Net()
     torch.cuda.set_device(gpu)
@@ -66,8 +83,8 @@ def train(gpu, args):
     )
     log("initialised distributed sampler")
 
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, pin_memory=True, sampler=train_sampler)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, pin_memory=True, sampler=test_sampler)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, pin_memory=True, sampler=train_sampler, num_workers=args.nb_workers, worker_init_fn=worker_init_fn)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, pin_memory=True, sampler=test_sampler, num_workers=args.nb_workers, worker_init_fn=worker_init_fn)
     log("initialised dataloader")
 
     log("beginning training loop")
@@ -114,6 +131,7 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--rank', default=0, type=int)
     parser.add_argument('--seed', default=123, type=int)
     parser.add_argument('--batch-size', default=256, type=int)
+    parser.add_argument('--nb-workers', default=4, type=int)
     parser.add_argument('--nb-epochs', default=1000, type=int)
     parser.add_argument('--address', default='127.0.0.1', type=str)
     parser.add_argument('--port', default='12345', type=str)
